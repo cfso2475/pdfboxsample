@@ -1,9 +1,19 @@
 package com.skylark.service.pdfsplitter;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.util.Iterator;
 
+import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
+import javax.imageio.ImageTypeSpecifier;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.metadata.IIOInvalidTreeException;
+import javax.imageio.metadata.IIOMetadata;
+import javax.imageio.metadata.IIOMetadataNode;
+import javax.imageio.stream.ImageOutputStream;
 
 import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.pdmodel.PDDocument; 
@@ -28,9 +38,9 @@ public class App
     	System.setProperty("sun.java2d.cmm", "sun.java2d.cmm.kcms.KcmsServiceProvider");
         
         //Loading an existing document
-        String filename="H:\\skylark\\Code\\WCM\\pdfextracter\\image4.pdf";
+        String filename="/Users/george/eclipse-workspace/pdfboxsample/testfile/image1.pdf";
         File file = new File(filename); 
-        
+        int dpi=300;
         
         PDDocument document;
 		try 
@@ -56,8 +66,9 @@ public class App
 				PDFRenderer renderer = new PDFRenderer(document);
 				//page number start with 0;
 				//BufferedImage image=renderer.renderImage(i);
-				BufferedImage image=renderer.renderImageWithDPI(i, 600);
-				ImageIO.write(image, "PNG", new File("H:\\skylark\\Code\\WCM\\pdfextracter\\page"+i+".png"));
+				BufferedImage image=renderer.renderImageWithDPI(i, dpi);
+				//ImageIO.write(image, "PNG", new File("/Users/george/eclipse-workspace/pdfboxsample/testfile/page"+i+"_"+dpi+".png"));
+				savePNGImage(new File("/Users/george/eclipse-workspace/pdfboxsample/testfile/page"+i+"_"+dpi+".png"),image,dpi);
 				
 				//Get Text of the PDF page
 				PDPage page=document.getPage(i);
@@ -81,10 +92,11 @@ public class App
 			            PDXObject o = pdResources.getXObject(c);
 			            if (o instanceof org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject) 
 			            {
-			            	String imgfilename="H:\\skylark\\Code\\WCM\\pdfextracter\\image\\" + System.nanoTime() + ".png";
+			            	String imgfilename="/Users/george/eclipse-workspace/pdfboxsample/testfile/image/" + System.nanoTime() + ".png";
 			                File tmpfile = new File(imgfilename);
-			            	System.out.println("Extract image "+imgfilename);
-			                ImageIO.write(((org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject)o).getImage(), "png", tmpfile);
+			            		System.out.println("Extract image "+imgfilename);
+			                //ImageIO.write(((org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject)o).getImage(), "png", tmpfile);
+			            		savePNGImage(tmpfile,((org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject)o).getImage(),dpi);
 			            }
 			        }
 			        
@@ -116,4 +128,71 @@ public class App
 			e.printStackTrace();
 		} 
     }
+    
+    private static void savePNGImage(File output, BufferedImage image, int dpi)
+    {
+    		output.delete();
+        final String formatName = "png";
+        ImageOutputStream stream = null;
+        
+        for (Iterator<ImageWriter> iw = ImageIO.getImageWritersByFormatName(formatName); iw.hasNext();) 
+        {
+           ImageWriter writer = iw.next();
+           ImageWriteParam writeParam = writer.getDefaultWriteParam();
+           ImageTypeSpecifier typeSpecifier = ImageTypeSpecifier.createFromBufferedImageType(BufferedImage.TYPE_INT_RGB);
+           IIOMetadata metadata = writer.getDefaultImageMetadata(typeSpecifier, writeParam);
+           if (metadata.isReadOnly() || !metadata.isStandardMetadataFormatSupported()) 
+           {
+              continue;
+           }
+           
+           try 
+           {
+        	   		setDPI(metadata,dpi);
+        	   		stream = ImageIO.createImageOutputStream(output);
+				writer.setOutput(stream);
+        	   		writer.write(metadata, new IIOImage(image, null, metadata), writeParam);
+           } 
+           catch (Exception e) 
+           {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+           }
+           finally 
+           {
+              try 
+              {
+				stream.close();
+              } 
+              catch (IOException e) 
+              {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+              }
+           }
+           break;
+        }
+     }
+
+     private static void setDPI(IIOMetadata metadata,int dpi) throws IIOInvalidTreeException 
+     {
+    	 	double INCH_2_CM = 2.54d;
+        // for PMG, it's dots per millimeter
+        double dotsPerMilli = 1.0 * dpi / 10 / INCH_2_CM;
+
+        IIOMetadataNode horiz = new IIOMetadataNode("HorizontalPixelSize");
+        horiz.setAttribute("value", Double.toString(dotsPerMilli));
+
+        IIOMetadataNode vert = new IIOMetadataNode("VerticalPixelSize");
+        vert.setAttribute("value", Double.toString(dotsPerMilli));
+
+        IIOMetadataNode dim = new IIOMetadataNode("Dimension");
+        dim.appendChild(horiz);
+        dim.appendChild(vert);
+
+        IIOMetadataNode root = new IIOMetadataNode("javax_imageio_1.0");
+        root.appendChild(dim);
+
+        metadata.mergeTree("javax_imageio_1.0", root);
+     }
 }
